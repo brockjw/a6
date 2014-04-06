@@ -166,10 +166,38 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
-  char * argv;
-  int backg = parseline(cmdline, *argv); //return true or false depending on either the job is background run or not
+  char *argv[MAXARGS]; //Argument list execve()
+  char *buf[MAXLINE]; //Holds modified command line
+  int bg; //Should run the job in background or not
+  pid_t pid; //Process ID
+  int status;
 
-  builtin_cmd(*argv);
+  strcpy(buf, cmdline);
+  bg = parseline(cmdline, *argv);
+  
+  if(argv[0] == NULL)
+    return; //ignore empty lines
+
+  if(builtin_cmd(*argv) == 1){ //the book does not passes argv as a pointer
+    
+    if((pid = Fork()) == 0) { //Child runs user job
+      if(execve(argv[0], argv, environ) < 0) { //what is environ?
+	printf("%s: Command not found. \n", argv[0]);
+	exit(0);
+      }
+    }
+
+    if(bg == 1){
+      
+      if(waitpid(pid, &status, 0) < 0)
+	unix_error("waitfg: waitpid error");
+    }
+    else
+      printf("%d %s", pid, cmdline);
+    
+  }
+
+  return;
 }
 
 /* 
@@ -552,6 +580,25 @@ void sigquit_handler(int sig)
     }
   }
   return;
+**/
+/**
+int cmp;
+
+cmp = strcmp("quit", argv);
+if(cmp == 0)
+  builtin_cmd(*argv);
+
+cmp = strcmp("jobs", argv);
+if(cmp == 0)
+  builtin_cmd(*argv);
+
+cmp = strcmp("bg", argv);
+if(cmp == 0)
+  builtin_cmd(*argv);
+
+cmp = strcmp("fg", argv);
+if(cmp == 0)
+  builtin_cmd(*argv);
 **/
 
 
