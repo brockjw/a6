@@ -166,13 +166,10 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
-
   char * argv;
   int backg = parseline(cmdline, *argv); //return true or false depending on either the job is background run or not
 
   builtin_cmd(*argv);
-
-
 }
 
 /* 
