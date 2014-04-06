@@ -1,5 +1,5 @@
 /* 
- * tsh - A tiny shell program with job control
+ * tsh - A tiny shell prlologram with job control
  * 
  * <H. Antonio Cardenas - hcardena> <Put your name and login ID here>
  * <Jacob W. Brock - jbrock>
