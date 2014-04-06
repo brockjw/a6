@@ -166,6 +166,15 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+
+  char * argv;
+  int backg = parseline(cmdline, *argv); //return true or false depending on either the job is background run or not
+
+  builtin_cmd(*argv);
+
+
+}void eval(char *cmdline) 
+{
     return;
 }
 
@@ -517,4 +526,37 @@ void sigquit_handler(int sig)
 }
 
 
+/**Antonio's Graveyard**/
+/**
+  short len1 = strlen(cmdline);
+  short len2;
+  short i= 0, j=0;
+  short k;
+  short cmp;
+  short bool = 0; //flag, 0 = false. 1 = true.
+  char* arg;
+
+  for(i = 0; i < len1; i++){
+
+    if(cmdline[i] != 32){
+
+      arg[j] = cmdline[i];
+      j++;
+
+    }else{
+
+      len2 = strlen(arg);
+      for(k = 0; k < len2; k++)
+        arg[k] = tolower(arg[k]);
+
+      cmp = strncmp("quit", arg, 4);
+      if(cmp
+
+
+
+
+    }
+  }
+  return;
+**/
 
