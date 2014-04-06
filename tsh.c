@@ -167,10 +167,10 @@ int main(int argc, char **argv)
 void eval(char *cmdline) 
 {
   char *argv[MAXARGS]; //Argument list execve()
-  char *buf[MAXLINE]; //Holds modified command line
+  char buf[MAXLINE]; //Holds modified command line
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
-  int status;
+  int status; //satus for waitpid
 
   strcpy(buf, cmdline);
   bg = parseline(cmdline, *argv);
@@ -180,7 +180,7 @@ void eval(char *cmdline)
 
   if(builtin_cmd(*argv) == 1){ //the book does not passes argv as a pointer
     
-    if((pid = Fork()) == 0) { //Child runs user job
+    if((pid = fork()) == 0) { //Child runs user job
       if(execve(argv[0], argv, environ) < 0) { //what is environ?
 	printf("%s: Command not found. \n", argv[0]);
 	exit(0);
