@@ -319,10 +319,16 @@ void sigchld_handler(int sig)
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.  
  */
-void sigint_handler(int sig) 
-{
-  printf("\tThis handler is under construction. Goodbye!\n");
-  exit(0);
+void sigint_handler(int sig) //catches signal #2
+{ 
+  int i;
+ 
+  for(i=0; i < MAXJOBS; i++){
+    if(jobs[i].state == FG){
+      kill(jobs[i].pid, sig);
+      return;
+    }
+  }  
 }
 
 /*
