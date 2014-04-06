@@ -173,9 +173,6 @@ void eval(char *cmdline)
   builtin_cmd(*argv);
 
 
-}void eval(char *cmdline) 
-{
-    return;
 }
 
 /* 
