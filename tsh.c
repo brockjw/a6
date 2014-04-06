@@ -1,5 +1,5 @@
 /* 
- * tsh - A tiny shell prlologram with job control
+ * tsh - A tiny shell program with job control
  * 
  * <H. Antonio Cardenas - hcardena> <Put your name and login ID here>
  * <Jacob W. Brock - jbrock>
@@ -178,21 +178,21 @@ void eval(char *cmdline)
   if(argv[0] == NULL)
     return; //ignore empty lines
 
-  if(!builtin_cmd(argv)){ //the book does not passes argv as a pointer
+  if(!builtin_cmd(argv)){
     
     if((pid = fork()) == 0) { //Child runs user job
-      if(execve(argv[0], argv, environ) < 0) { //what is environ?
+      if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
 	printf("%s: Command not found. \n", argv[0]);
 	exit(0);
       }
     }
 
-    if(bg == 1){
+    if(!bg){ //foreground job. Shell waits for the job to complete
       
       if(waitpid(pid, &status, 0) < 0)
 	unix_error("waitfg: waitpid error");
     }
-    else
+    else //background job. Shell does not wait for the job.
       printf("%d %s", pid, cmdline);
     
   }
@@ -321,7 +321,8 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
-    return;
+  printf("\tThis handler is under construction. Goodbye!\n");
+  exit(0);
 }
 
 /*
