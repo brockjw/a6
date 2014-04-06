@@ -173,12 +173,12 @@ void eval(char *cmdline)
   int status; //satus for waitpid
 
   strcpy(buf, cmdline);
-  bg = parseline(cmdline, *argv);
+  bg = parseline(buf, argv);
   
   if(argv[0] == NULL)
     return; //ignore empty lines
 
-  if(builtin_cmd(*argv) == 1){ //the book does not passes argv as a pointer
+  if(!builtin_cmd(argv)){ //the book does not passes argv as a pointer
     
     if((pid = fork()) == 0) { //Child runs user job
       if(execve(argv[0], argv, environ) < 0) { //what is environ?
