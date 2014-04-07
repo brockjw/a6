@@ -333,17 +333,19 @@ void sigchld_handler(int sig)
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.  
  */
-void sigint_handler(int sig) //catches signal #2
+void sigint_handler(int sig) //Antonio
 { 
-  int i;
+  pid_t fg_pid; 
   
-  for(i=0; i < MAXJOBS; i++){
-    if(jobs[i].state == FG){
-      kill(jobs[i].pid, sig);
-      deletejob(jobs, jobs[i].pid);
-      return;
-    }
-  }  
+  fg_pid = fgpid(jobs);
+ 
+  if(!fg_pid)
+    return;
+
+  kill(fg_pid, sig);
+  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
+  deletejob(jobs, fg_pid);
+  return;
 }
 
 /*
@@ -351,7 +353,7 @@ void sigint_handler(int sig) //catches signal #2
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.  
  */
-void sigtstp_handler(int sig) 
+void sigtstp_handler(int sig) //Jake 
 {
   int i;
 
