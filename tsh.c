@@ -279,6 +279,9 @@ int builtin_cmd(char **argv) //Jake
     return 1;
   }
   else if(!strcmp(argv[0], "fg")) {
+    // find job with jid == argv[1].
+    // find FG job, send to BG.
+    // job.status = FG; send SIGCONT signal;
     struct job_t * job = getjobjid(jobs, atoi(argv[1]));
     int i;
 
@@ -301,7 +304,8 @@ int builtin_cmd(char **argv) //Jake
  */
 void do_bgfg(char **argv) 
 {
-    return;
+  // Question: Don't understand why this is here... don't we just do this in builtin_cmd()?
+  return;
 }
 
 /* 
