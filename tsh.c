@@ -326,6 +326,7 @@ void sigint_handler(int sig) //catches signal #2
   for(i=0; i < MAXJOBS; i++){
     if(jobs[i].state == FG){
       kill(jobs[i].pid, sig);
+      deletejob(jobs, jobs[i].pid);
       return;
     }
   }  
