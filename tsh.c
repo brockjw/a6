@@ -164,7 +164,7 @@ int main(int argc, char **argv)
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.  
 */
-void eval(char *cmdline) 
+void eval(char *cmdline) //Antonio
 {
   char *argv[MAXARGS]; //Argument list execve()
   char buf[MAXLINE]; //Holds modified command line
@@ -182,15 +182,15 @@ void eval(char *cmdline)
     
     if((pid = fork()) == 0) { //Child runs user job
       if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
-	printf("%s: Command not found. \n", argv[0]);
-	exit(0);
+        printf("%s: Command not found. \n", argv[0]);
+        exit(0);
       }
     }
 
     if(!bg){ //foreground job. Shell waits for the job to complete
       
       if(waitpid(pid, &status, 0) < 0)
-	unix_error("waitfg: waitpid error");
+        unix_error("waitfg: waitpid error");
     }
     else //background job. Shell does not wait for the job.
       printf("%d %s", pid, cmdline);
@@ -261,22 +261,36 @@ int parseline(const char *cmdline, char **argv)
  * builtin_cmd - If the user has typed a built-in command then execute
  *    it immediately.  
  */
-int builtin_cmd(char **argv) // Was Empty
+int builtin_cmd(char **argv) //Jake
 {
   //strcmp() returns 0 if strings are equal
   if(!strcmp(argv[0], "quit")) {
     exit(0);
   }
-  if(!strcmp(argv[0], "jobs")) {
+  else if(!strcmp(argv[0], "jobs")) {
     listjobs(jobs);
     return 1;
   }
-  if(!strcmp(argv[0], "bg")) {
-    //execute bg
+  else if(!strcmp(argv[0], "bg")) {
+    // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
+    struct job_t * job = getjobjid(jobs, atoi(argv[1]));
+    job->state = BG;
+    kill(job->pid, SIGCONT);
     return 1;
   }
-  if(!strcmp(argv[0], "fg")) {
-    //execute fg
+  else if(!strcmp(argv[0], "fg")) {
+    struct job_t * job = getjobjid(jobs, atoi(argv[1]));
+    int i;
+
+    for(i=0; i < MAXJOBS; i++){
+      if(jobs[i].state == FG){
+        jobs[i].state = BG;
+        break;
+      }
+    }  
+
+    job->state = FG;
+    kill(job->pid, SIGCONT);
     return 1;
   }
   return 0;     /* not a builtin command */
@@ -339,7 +353,16 @@ void sigint_handler(int sig) //catches signal #2
  */
 void sigtstp_handler(int sig) 
 {
-    return;
+  int i;
+
+  for(i=0; i < MAXJOBS; i++){
+    if(jobs[i].state == FG){
+      kill(jobs[i].pid, sig);
+      deletejob(jobs, jobs[i].pid);
+      return;
+    }
+  }  
+  return;
 }
 
 /*********************
