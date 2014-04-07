@@ -1,5 +1,5 @@
 /* 
- * tsh - A tiny shell program with job control Hello World!
+ * tsh - A tiny shell program with job control
  * 
  * <H. Antonio Cardenas - hcardena> <Put your name and login ID here>
  * <Jacob W. Brock - jbrock>
@@ -322,7 +322,7 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) //catches signal #2
 { 
   int i;
- 
+  
   for(i=0; i < MAXJOBS; i++){
     if(jobs[i].state == FG){
       kill(jobs[i].pid, sig);
