@@ -171,13 +171,13 @@ void eval(char *cmdline) //Antonio
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
   int status; //satus for waitpid
-
+  
   strcpy(buf, cmdline);
   bg = parseline(buf, argv);
   
   if(argv[0] == NULL)
     return; //ignore empty lines
-
+  
   if(!builtin_cmd(argv)){
     
     if((pid = fork()) == 0) { //Child runs user job
@@ -186,6 +186,7 @@ void eval(char *cmdline) //Antonio
         exit(0);
       }
     }
+    
 
     if(!bg){ //foreground job. Shell waits for the job to complete
       
@@ -307,9 +308,14 @@ void do_bgfg(char **argv)
 /* 
  * waitfg - Block until process pid is no longer the foreground process
  */
-void waitfg(pid_t pid)
+void waitfg(pid_t pid) //Antonio
 {
-    return;
+  //http://linux.die.net/man/2/waitpid
+  //http://stackoverflow.com/questions/900411/how-to-properly-wait-for-foreground-background-processes-in-my-own-shell-in-c
+  //http://www.tutorialspoint.com/unix_system_calls/execve.htm
+  // waitpid(pid, &status, 0);
+  // waitpid(pid, &status, WNOHANG); //first implementation. Might need revisions.
+  return;
 }
 
 /*****************
