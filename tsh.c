@@ -335,16 +335,20 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) //Antonio
 { 
+
+
+ /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
+
   pid_t fg_pid; 
   
   fg_pid = fgpid(jobs);
  
   if(!fg_pid)
     return;
-
-  kill(fg_pid, sig);
-  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
-  deletejob(jobs, fg_pid);
+  else{
+    kill(fg_pid, sig);
+    deletejob(jobs, fg_pid);
+  }
   return;
 }
 
