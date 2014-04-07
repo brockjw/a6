@@ -134,13 +134,13 @@ int main(int argc, char **argv)
     
     /* Read command line */
     if (emit_prompt) {
-	    printf("%s", prompt);
+      printf("%s", prompt);
 	    fflush(stdout);
     }
     if ((fgets(cmdline, MAXLINE, stdin) == NULL) && ferror(stdin))
-	    app_error("fgets error");
+      app_error("fgets error");
     if (feof(stdin)) { /* End of file (ctrl-d) */
-	    fflush(stdout);
+      fflush(stdout);
 	    exit(0);
     }
     
@@ -172,14 +172,13 @@ void eval(char *cmdline) //Antonio
   pid_t pid; //Process ID
   int status; //satus for waitpid
   
-  strcpy(buf, cmdline);
+  strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
   bg = parseline(buf, argv);
   
   if(argv[0] == NULL)
     return; //ignore empty lines
   
   if(!builtin_cmd(argv)){
-    
     if((pid = fork()) == 0) { //Child runs user job
       if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
         printf("%s: Command not found. \n", argv[0]);
@@ -187,15 +186,12 @@ void eval(char *cmdline) //Antonio
       }
     }
     
-
     if(!bg){ //foreground job. Shell waits for the job to complete
-      
       if(waitpid(pid, &status, 0) < 0)
         unix_error("waitfg: waitpid error");
     }
     else //background job. Shell does not wait for the job.
       printf("%d %s", pid, cmdline);
-    
   }
 
   return;
