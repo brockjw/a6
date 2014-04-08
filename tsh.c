@@ -167,13 +167,15 @@ int main(int argc, char **argv)
 void eval(char *cmdline) //Antonio
 {
   char *argv[MAXARGS]; //Argument list execve()
-  char buf[MAXLINE]; //Holds modified command line
+  //char buf[MAXLINE]; //Holds modified command line
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
   int status; //satus for waitpid
   
-  strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
-  bg = parseline(buf, argv);
+  
+  //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
+  //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
+  bg = parseline(cmdline, argv);
   
   if(argv[0] == NULL)
     return; //ignore empty lines
@@ -187,13 +189,16 @@ void eval(char *cmdline) //Antonio
     }
     
     if(!bg){ //foreground job. Shell waits for the job to complete
+      addjob(jobs, pid, FG, cmdline);
       if(waitpid(pid, &status, 0) < 0)
         unix_error("waitfg: waitpid error");
     }
-    else //background job. Shell does not wait for the job.
+    else{ //background job. Shell does not wait for the job.
+      addjob(jobs, pid, BG, cmdline);
       printf("%d %s", pid, cmdline);
+    }
   }
-
+  
   return;
 }
 
@@ -415,15 +420,15 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
     
   if (pid < 1)
     return 0;
-
+  
   for (i = 0; i < MAXJOBS; i++) {
     if (jobs[i].pid == 0) {
-	    jobs[i].pid = pid;
-	    jobs[i].state = state;
-	    jobs[i].jid = nextjid++;
-	    if (nextjid > MAXJOBS)
+      jobs[i].pid = pid;
+      jobs[i].state = state;
+      jobs[i].jid = nextjid++;
+      if (nextjid > MAXJOBS)
         nextjid = 1;
-	    strcpy(jobs[i].cmdline, cmdline);
+      strcpy(jobs[i].cmdline, cmdline);
       if(verbose){
         printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
       }
