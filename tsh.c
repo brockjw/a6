@@ -44,10 +44,10 @@ int nextjid = 1;            /* next job ID to allocate */
 char sbuf[MAXLINE];         /* for composing sprintf messages */
 
 struct job_t {              /* The job struct */
-    pid_t pid;              /* job PID */
-    int jid;                /* job ID [1, 2, ...] */
-    int state;              /* UNDEF, BG, FG, or ST */
-    char cmdline[MAXLINE];  /* command line */
+  pid_t pid;              /* job PID */
+  int jid;                /* job ID [1, 2, ...] */
+  int state;              /* UNDEF, BG, FG, or ST */
+  char cmdline[MAXLINE];  /* command line */
 };
 struct job_t jobs[MAXJOBS]; /* The job list */
 /* End global variables */
@@ -91,6 +91,14 @@ handler_t *Signal(int signum, handler_t *handler);
  */
 int main(int argc, char **argv) 
 {
+  /*Added by Jake
+  //Print Environment Variables
+  int i = 0;
+  while(environ[i]) {
+    printf("%s\n", environ[i++]);
+  }
+  */
+
   char c;
   char cmdline[MAXLINE];
   int emit_prompt = 1; /* emit prompt (default) */
@@ -131,7 +139,6 @@ int main(int argc, char **argv)
   
   /* Execute the shell's read/eval loop */
   while (1) {
-    
     /* Read command line */
     if (emit_prompt) {
       printf("%s", prompt);
@@ -197,6 +204,8 @@ void eval(char *cmdline) //Antonio
       addjob(jobs, pid, BG, cmdline);
       printf("%d %s", pid, cmdline);
     }
+    if(!bg && waitpid(pid, &status, 0) > 0)
+      deletejob(jobs, pid);
   }
   
   return;
