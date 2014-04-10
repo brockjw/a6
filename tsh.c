@@ -183,7 +183,7 @@ void eval(char *cmdline) //Antonio
   //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
   //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
   bg = parseline(cmdline, argv);
-  
+
   if(argv[0] == NULL)
     return; //ignore empty lines
   
@@ -197,15 +197,15 @@ void eval(char *cmdline) //Antonio
     
     if(!bg){ //foreground job. Shell waits for the job to complete
       addjob(jobs, pid, FG, cmdline);
-      if(waitpid(pid, &status, 0) < 0)
+      if(waitpid(pid, &status, 0) < 0) {
         unix_error("waitfg: waitpid error");
+      }
+      deletejob(jobs, pid); // Reap when fg job is done :-/
     }
     else{ //background job. Shell does not wait for the job.
       addjob(jobs, pid, BG, cmdline);
       printf("%d %s", pid, cmdline);
     }
-    if(!bg && waitpid(pid, &status, 0) > 0)
-      deletejob(jobs, pid);
   }
   
   return;
@@ -341,7 +341,14 @@ void waitfg(pid_t pid) //Antonio
  */
 void sigchld_handler(int sig) 
 {
-    return;
+  int pid, status;
+  // Guy on stackoverflow.com/questions/8220729/not-receiving-sigchld-for-processes-executed-with-sudo
+  // used WNOHANG, but book used 0.  don't know why.
+  while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    deletejob(jobs, pid);
+  }
+
+  return;
 }
 
 /* 
