@@ -189,12 +189,15 @@ void eval(char *cmdline) //Antonio
   
   if(!builtin_cmd(argv)){
     if((pid = fork()) == 0) { //Child runs user job
+      setpgid(0, 0);
       if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
         printf("%s: Command not found. \n", argv[0]);
         exit(0);
       }
     }
-    
+
+    note_to_self_do_tcsetpgrp_stuff_explained_in_assn_site();
+
     if(!bg){ //foreground job. Shell waits for the job to complete
       addjob(jobs, pid, FG, cmdline);
       if(waitpid(pid, &status, 0) < 0) {
@@ -282,15 +285,26 @@ int builtin_cmd(char **argv) //Jake
     listjobs(jobs);
     return 1;
   }
-  else if(!strcmp(argv[0], "bg")) {
-    // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
-    struct job_t * job = getjobjid(jobs, atoi(argv[1]));
-    job->state = BG;
-    kill(job->pid, SIGCONT);
+  else if(!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
+    do_bgfg(argv);
     return 1;
   }
-  else if(!strcmp(argv[0], "fg")) {
-    struct job_t * job = getjobjid(jobs, atoi(argv[1]));
+  return 0;     /* not a builtin command */
+}
+
+/* 
+ * do_bgfg - Execute the builtin bg and fg commands
+ */
+void do_bgfg(char **argv) 
+{
+  struct job_t * job = getjobjid(jobs, atoi(argv[1]));
+
+  if(!strcmp(argv[0], "bg")) {
+    // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
+    job->state = BG;
+    kill(job->pid, SIGCONT);
+  }
+  else {
     int i;
 
     for(i=0; i < MAXJOBS; i++){
@@ -302,17 +316,9 @@ int builtin_cmd(char **argv) //Jake
 
     job->state = FG;
     kill(job->pid, SIGCONT);
-    return 1;
   }
-  return 0;     /* not a builtin command */
-}
 
-/* 
- * do_bgfg - Execute the builtin bg and fg commands
- */
-void do_bgfg(char **argv) 
-{
-    return;
+  return;
 }
 
 /* 
@@ -342,8 +348,12 @@ void waitfg(pid_t pid) //Antonio
 void sigchld_handler(int sig) 
 {
   int pid, status;
-  // Guy on stackoverflow.com/questions/8220729/not-receiving-sigchld-for-processes-executed-with-sudo
-  // used WNOHANG, but book used 0.  don't know why.
+
+  // Comment from http://www.gnu.org/software/libc/manual/html_node/Foreground-and-Background.html#Foreground-and-Background
+  // When all of the processes in the group have either completed or stopped, the shell should regain control of the terminal for its own process group by calling tcsetpgrp again.
+
+  // Reap every child (not necessarily one signal per child).
+  // WNOHANG means quit once all zombies are reaped.
   while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     deletejob(jobs, pid);
   }
@@ -358,20 +368,17 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) //Antonio
 { 
-
-
  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
 
   pid_t fg_pid; 
   
   fg_pid = fgpid(jobs);
- 
-  if(!fg_pid)
-    return;
-  else{
+
+  if(fg_pid) {
     kill(fg_pid, sig);
     deletejob(jobs, fg_pid);
   }
+
   return;
 }
 
