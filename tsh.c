@@ -98,6 +98,13 @@ int main(int argc, char **argv)
     printf("%s\n", environ[i++]);
   }
   */
+  sigset_t sa_mask;
+  sigemptyset(&sa_mask);
+  sigaddset(&sa_mask, SIGTTOU);
+  sigprocmask(SIG_BLOCK, &sa_mask, NULL);
+
+  // Debug
+  //  printf("terimal gid: %d\n", getgid());
 
   char c;
   char cmdline[MAXLINE];
@@ -190,13 +197,18 @@ void eval(char *cmdline) //Antonio
   if(!builtin_cmd(argv)){
     if((pid = fork()) == 0) { //Child runs user job
       setpgid(0, 0);
+      if(!bg)
+        // Get the gid from stdin, and then set that as the grpid for this process.
+        // see https://support.sas.com/documentation/onlinedoc/sasc/doc/lr2/tsetpgp.htm for help
+        // and assertions to make it robust.
+        tcsetpgrp(STDIN_FILENO, tcgetpgrp(STDIN_FILENO));
       if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
         printf("%s: Command not found. \n", argv[0]);
         exit(0);
       }
     }
 
-    note_to_self_do_tcsetpgrp_stuff_explained_in_assn_site();
+    //    note_to_self_do_tcsetpgrp_stuff_explained_in_assn_site();
 
     if(!bg){ //foreground job. Shell waits for the job to complete
       addjob(jobs, pid, FG, cmdline);
@@ -207,7 +219,7 @@ void eval(char *cmdline) //Antonio
     }
     else{ //background job. Shell does not wait for the job.
       addjob(jobs, pid, BG, cmdline);
-      printf("%d %s", pid, cmdline);
+      printf("[%d] (%d) %s", getjobpid(jobs, pid)->jid,  pid, cmdline);
     }
   }
   
@@ -297,25 +309,37 @@ int builtin_cmd(char **argv) //Jake
  */
 void do_bgfg(char **argv) 
 {
-  struct job_t * job = getjobjid(jobs, atoi(argv[1]));
+  int status;
+
+  // Handle input formats: fg %1 or fg 1.
+  struct job_t * job;
+  if(argv[1][0] == '%') {
+    job = getjobjid(jobs, atoi(argv[1] + 1));
+  } else {
+    job = getjobjid(jobs, atoi(argv[1]));
+  }
 
   if(!strcmp(argv[0], "bg")) {
     // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
     job->state = BG;
     kill(job->pid, SIGCONT);
   }
-  else {
-    int i;
-
-    for(i=0; i < MAXJOBS; i++){
-      if(jobs[i].state == FG){
-        jobs[i].state = BG;
-        break;
-      }
-    }  
-
-    job->state = FG;
+  else { // "fg"
     kill(job->pid, SIGCONT);
+    job->state = FG;
+    setpgid(job->pid, tcgetpgrp(STDIN_FILENO));
+
+    // Since it's in the fg, wait for it - not sure if correct.
+    if(waitpid(job->pid, &status, 0) < 0) {
+      unix_error("waitfg: waitpid error");
+    }
+    // Reap when fg job is done :-/
+    deletejob(jobs, job->pid); 
+
+    //    tcsetpgrp(STDIN_FILENO, tcgetpgrp(STDIN_FILENO));
+    //    tcsetpgrp(STDIN_FILENO, getgid());
+    printf("new gid: %d\n", getgid());
+
   }
 
   return;
@@ -376,6 +400,8 @@ void sigint_handler(int sig) //Antonio
 
   if(fg_pid) {
     kill(fg_pid, sig);
+    printf("Job [%d] (%d) terminated by signal %d\n",
+           getjobpid(jobs, fg_pid)->jid, fg_pid, sig);
     deletejob(jobs, fg_pid);
   }
 
@@ -677,3 +703,15 @@ if(cmp == 0)
 
 /**Jake's Graveyard**/
 //test
+
+// Move current FG job to BG
+/*
+    int i;
+
+    for(i=0; i < MAXJOBS; i++){
+      if(jobs[i].state == FG){
+        jobs[i].state = BG;
+        break;
+      }
+    }  
+*/
