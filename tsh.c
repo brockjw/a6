@@ -319,6 +319,12 @@ void do_bgfg(char **argv)
     job = getjobjid(jobs, atoi(argv[1]));
   }
 
+  // If job does not exist, print error message.
+  if(job == NULL){
+    printf("%s: No such job\n", argv[1]);
+    return;
+  }
+
   if(!strcmp(argv[0], "bg")) {
     // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
     job->state = BG;
