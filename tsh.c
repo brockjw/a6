@@ -45,6 +45,7 @@ char sbuf[MAXLINE];         /* for composing sprintf messages */
 
 struct job_t {              /* The job struct */
   pid_t pid;              /* job PID */
+  //  pid_t gid; /* job GID (added by Jake) */
   int jid;                /* job ID [1, 2, ...] */
   int state;              /* UNDEF, BG, FG, or ST */
   char cmdline[MAXLINE];  /* command line */
@@ -186,37 +187,38 @@ void eval(char *cmdline) //Antonio
   pid_t pid; //Process ID
   int status; //satus for waitpid
   
-  
   //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
   //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
   bg = parseline(cmdline, argv);
-  fg = !bg;
+  int fg = !bg;
 
   if(argv[0] == NULL)
     return; //ignore empty lines
   
   if(!builtin_cmd(argv)){
     if((pid = fork()) == 0) { //Child runs user job
-      setpgid(0, 0);
-      if(!bg)
-        // Get the gid from stdin, and then set that as the grpid for this process.
-        // see https://support.sas.com/documentation/onlinedoc/sasc/doc/lr2/tsetpgp.htm for help
-        // and assertions to make it robust.
-        tcsetpgrp(STDIN_FILENO, tcgetpgrp(STDIN_FILENO));
-      if(execve(argv[0], argv, environ) < 0) { //environ is a global variable defined above
+      setpgid(0,0);//getpid(), getpid());
+
+      /*      sigset_t sa_mask;
+      sigemptyset(&sa_mask);
+      sigaddset(&sa_mask, SIGTTOU);
+      sigprocmask(SIG_BLOCK, &sa_mask, NULL); */
+
+      if(execve(argv[0], argv, environ) < 0) { //environ is a global
         printf("%s: Command not found. \n", argv[0]);
         exit(0);
       }
     }
 
-    //    note_to_self_do_tcsetpgrp_stuff_explained_in_assn_site();
-
-    if(!bg){ //foreground job. Shell waits for the job to complete
+    if(fg){ //foreground job. Shell waits for the job to complete
       addjob(jobs, pid, FG, cmdline);
+      tcsetpgrp(STDIN_FILENO, pid);
+
       if(waitpid(pid, &status, 0) < 0) {
         unix_error("waitfg: waitpid error");
       }
       deletejob(jobs, pid); // Reap when fg job is done :-/
+      tcsetpgrp(STDIN_FILENO, getpid());
     }
     else{ //background job. Shell does not wait for the job.
       addjob(jobs, pid, BG, cmdline);
@@ -401,6 +403,8 @@ void sigint_handler(int sig) //Antonio
 { 
  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
 
+  printf("HI GUYS!!!\n");
+
   pid_t fg_pid; 
   
   fg_pid = fgpid(jobs);
@@ -422,15 +426,19 @@ void sigint_handler(int sig) //Antonio
  */
 void sigtstp_handler(int sig) //Jake 
 {
+  printf("Hi Jake and Ant\n");
+
   int i;
 
+  tcsetpgrp(STDIN_FILENO, getpid());
   for(i=0; i < MAXJOBS; i++){
     if(jobs[i].state == FG){
+      jobs[i].state = ST;
       kill(jobs[i].pid, sig);
-      deletejob(jobs, jobs[i].pid);
+      listjobs(jobs);
       return;
     }
-  }  
+  }
   return;
 }
 
