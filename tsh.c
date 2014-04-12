@@ -1,4 +1,4 @@
-/* 
+ /* 
  * tsh - A tiny shell program with job control
  * 
  * <H. Antonio Cardenas - hcardena> <Put your name and login ID here>
@@ -190,6 +190,7 @@ void eval(char *cmdline) //Antonio
   //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
   //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
   bg = parseline(cmdline, argv);
+  fg = !bg;
 
   if(argv[0] == NULL)
     return; //ignore empty lines
