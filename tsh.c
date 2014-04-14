@@ -408,11 +408,54 @@ void sigchld_handler(int sig)
 
   // Comment from http://www.gnu.org/software/libc/manual/html_node/Foreground-and-Background.html#Foreground-and-Background
   // When all of the processes in the group have either completed or stopped, the shell should regain control of the terminal for its own process group by calling tcsetpgrp again.
-
+  
   // Reap every child (not necessarily one signal per child).
   // WNOHANG means quit once all zombies are reaped.
-  while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    deletejob(jobs, pid);
+  while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+    
+    
+    if(WIFEXITED(status)){
+      deletejob(jobs, pid);
+      return; //Process Terminated Normally.
+    }
+    else if(WIFSIGNALED(status)){   //Signal Terminated the child. Find out which signal.
+      
+      int which_signal = WTERMSIG(status);
+      
+      if(which_signal == SIGINT){
+        if(pid == fgpid(jobs)){
+
+          printf("Job [%d] (%d) terminated by signal %d\n", getjobpid(jobs, pid)->jid, pid, sig);
+          deletejob(jobs, pid);
+        }
+        else
+          return; //no foreground job.
+      }
+
+      //not sure if it handles stp or stop (they're different)
+      else if(which_signal == SIGTSTP || which_signal == SIGSTOP){
+
+        getjobpid(jobs, pid)->state = ST;
+        
+        return;
+      }
+      else if(WIFSTOPPED(status)){
+        
+        //        int which_signal = WSTOPSIG(status);
+        getjobpid(jobs, pid)->state = ST;
+      }
+      
+      
+    
+    
+    
+
+    
+    
+    
+    
+    
+
     // Then do stuff with the status flag. using macros from man waitpid
   }
 
@@ -438,7 +481,7 @@ void sigint_handler(int sig) //Antonio
     // Before, we sent sig, but that exited the shell :( so try SIGKILL
     // I think it's because the shell never gets SIGCHLD that way so the
     // tcsegpgrp was never called? --- nope that didn't work.
-    kill(fg_pid, sig);
+    kill(fg_pid, sig); //why is this here? doesnt this only sends another signal? that's dumb.
     //kill(getpid(), SIGCHLD);
     printf("Job [%d] (%d) terminated by signal %d\n",
            getjobpid(jobs, fg_pid)->jid, fg_pid, sig);
@@ -671,7 +714,7 @@ void app_error(char *msg)
 /*
  * Signal - wrapper for the sigaction function
  */
-handler_t *Signal(int signum, handler_t *handler) 
+ handler_t *Signal(int signum, handler_t *handler) 
 {
   struct sigaction action, old_action;
   
@@ -688,7 +731,7 @@ handler_t *Signal(int signum, handler_t *handler)
  * sigquit_handler - The driver program can gracefully terminate the
  *    child shell by sending it a SIGQUIT signal.
  */
-void sigquit_handler(int sig) 
+ void sigquit_handler(int sig) 
 {
   printf("Terminating after receipt of SIGQUIT signal\n");
   exit(1);
