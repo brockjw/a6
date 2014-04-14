@@ -189,7 +189,7 @@ void eval(char *cmdline) //Antonio
   //char buf[MAXLINE]; //Holds modified command line
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
-  int status; //satus for waitpid
+  //  int status; //satus for waitpid
   
   //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
   //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
@@ -224,10 +224,11 @@ void eval(char *cmdline) //Antonio
       tcsetpgrp(STDIN_FILENO, pid); /* Pass control of terminal to child. */
 
       // Use waitfg instead
-      
-      if(waitpid(pid, &status, 0) < 0) {
-        unix_error("waitfg: waitpid error");
-      }
+      waitfg(pid); /* Sleep in 1 sec increments until job is no longer in foreground. */
+
+      //      if(waitpid(pid, &status, 0) < 0) {
+      //        unix_error("waitfg: waitpid error");
+      //      }
 
       tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
       deletejob(jobs, pid); /* Reap foreground job. */
@@ -327,7 +328,7 @@ int builtin_cmd(char **argv) //Jake
  */
 void do_bgfg(char **argv) 
 {
-  int status;
+  //  int status;
 
   // Handle input formats: fg %1 or fg 1.
   struct job_t * job;
@@ -352,23 +353,23 @@ void do_bgfg(char **argv)
     kill(job->pid, SIGCONT);
     job->state = FG;
     setpgid(job->pid, tcgetpgrp(STDIN_FILENO));
+    tcsetpgrp(STDIN_FILENO, job->pid); /* Pass control of terminal to child. */
 
     // Since it's in the fg, wait for it - not sure if correct.
     //USE WAITFG IN HERE
-    if(waitpid(job->pid, &status, 0) < 0) {
-      unix_error("waitfg: waitpid error");
-    }
+
+    waitfg(job->pid); /* Wait until job is no longer the foreground process. */
+    tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
+    //    if(waitpid(job->pid, &status, 0) < 0) {
+    //      unix_error("waitfg: waitpid error");
+    //    }
+
     // Reap when fg job is done :-/
     // HAVE SIGCHLD_HANDLER DELETE THE JOBS
-    deletejob(jobs, job->pid); 
+    //    deletejob(jobs, job->pid); 
 
-    // DO TCSETPGRP STUFF
-    //    tcsetpgrp(STDIN_FILENO, tcgetpgrp(STDIN_FILENO));
-    //    tcsetpgrp(STDIN_FILENO, getgid());
     printf("new gid: %d\n", getgid());
-
   }
-
   return;
 }
 
@@ -377,7 +378,7 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid) //Antonio
 {
-  job_t * job = getjobpid(jobs, pid);
+  struct job_t * job = getjobpid(jobs, pid);
   while(job->state == FG) {
     sleep(1);
   }
