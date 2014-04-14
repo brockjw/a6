@@ -92,17 +92,21 @@ handler_t *Signal(int signum, handler_t *handler);
  */
 int main(int argc, char **argv) 
 {
-  /*Added by Jake
+  //Added by Jake
   //Print Environment Variables
+  /*
   int i = 0;
   while(environ[i]) {
     printf("%s\n", environ[i++]);
   }
   */
-  sigset_t sa_mask;
+
+  //Added by Jake/Antonio
+  /*  sigset_t sa_mask;
   sigemptyset(&sa_mask);
   sigaddset(&sa_mask, SIGTTOU);
   sigprocmask(SIG_BLOCK, &sa_mask, NULL);
+  */
 
   // Debug
   //  printf("terimal gid: %d\n", getgid());
@@ -194,36 +198,47 @@ void eval(char *cmdline) //Antonio
 
   if(argv[0] == NULL)
     return; //ignore empty lines
-  
+
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGCHLD);
+  sigaddset(&mask, SIGTTIN);
+  sigaddset(&mask, SIGTTOU);
+  sigaddset(&mask, SIGTSTP);
+  sigprocmask(SIG_BLOCK, &mask, NULL); /* Block SIGCHLD and SIGTSTP */
+
   if(!builtin_cmd(argv)){
-    if((pid = fork()) == 0) { //Child runs user job
-      setpgid(0,0);//getpid(), getpid());
+    if((pid = fork()) == 0) { /* Child runs user job. */
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock signals */
+      setpgid(0,0); /* Put this process into its own group. */
 
-      /*      sigset_t sa_mask;
-      sigemptyset(&sa_mask);
-      sigaddset(&sa_mask, SIGTTOU);
-      sigprocmask(SIG_BLOCK, &sa_mask, NULL); */
-
-      if(execve(argv[0], argv, environ) < 0) { //environ is a global
+      if(execve(argv[0], argv, environ) < 0) {
         printf("%s: Command not found. \n", argv[0]);
         exit(0);
       }
     }
 
-    if(fg){ //foreground job. Shell waits for the job to complete
+    if(fg) { /* Shell waits for foreground job. */
       addjob(jobs, pid, FG, cmdline);
-      tcsetpgrp(STDIN_FILENO, pid);
 
+      tcsetpgrp(STDIN_FILENO, pid); /* Pass control of terminal to child. */
+
+      // Use waitfg instead
+      
       if(waitpid(pid, &status, 0) < 0) {
         unix_error("waitfg: waitpid error");
       }
-      deletejob(jobs, pid); // Reap when fg job is done :-/
-      tcsetpgrp(STDIN_FILENO, getpid());
+
+      tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
+      deletejob(jobs, pid); /* Reap foreground job. */
     }
-    else{ //background job. Shell does not wait for the job.
+    else { /* Shell does not wait for background job. */
       addjob(jobs, pid, BG, cmdline);
       printf("[%d] (%d) %s", getjobpid(jobs, pid)->jid,  pid, cmdline);
     }
+
+    // This prevents race condition - see book p. 757.
+    sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
   }
   
   return;
@@ -339,12 +354,15 @@ void do_bgfg(char **argv)
     setpgid(job->pid, tcgetpgrp(STDIN_FILENO));
 
     // Since it's in the fg, wait for it - not sure if correct.
+    //USE WAITFG IN HERE
     if(waitpid(job->pid, &status, 0) < 0) {
       unix_error("waitfg: waitpid error");
     }
     // Reap when fg job is done :-/
+    // HAVE SIGCHLD_HANDLER DELETE THE JOBS
     deletejob(jobs, job->pid); 
 
+    // DO TCSETPGRP STUFF
     //    tcsetpgrp(STDIN_FILENO, tcgetpgrp(STDIN_FILENO));
     //    tcsetpgrp(STDIN_FILENO, getgid());
     printf("new gid: %d\n", getgid());
@@ -359,12 +377,17 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid) //Antonio
 {
+  job_t * job = getjobpid(jobs, pid);
+  while(job->state == FG) {
+    sleep(1);
+  }
+  return;
+
   //http://linux.die.net/man/2/waitpid
   //http://stackoverflow.com/questions/900411/how-to-properly-wait-for-foreground-background-processes-in-my-own-shell-in-c
   //http://www.tutorialspoint.com/unix_system_calls/execve.htm
   // waitpid(pid, &status, 0);
   // waitpid(pid, &status, WNOHANG); //first implementation. Might need revisions.
-  return;
 }
 
 /*****************
@@ -389,6 +412,7 @@ void sigchld_handler(int sig)
   // WNOHANG means quit once all zombies are reaped.
   while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     deletejob(jobs, pid);
+    // Then do stuff with the status flag. using macros from man waitpid
   }
 
   return;
@@ -403,14 +427,18 @@ void sigint_handler(int sig) //Antonio
 { 
  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
 
-  printf("HI GUYS!!!\n");
+  //  printf("Hello from sigint_handler\n");
 
   pid_t fg_pid; 
   
   fg_pid = fgpid(jobs);
 
   if(fg_pid) {
+    // Before, we sent sig, but that exited the shell :( so try SIGKILL
+    // I think it's because the shell never gets SIGCHLD that way so the
+    // tcsegpgrp was never called? --- nope that didn't work.
     kill(fg_pid, sig);
+    //kill(getpid(), SIGCHLD);
     printf("Job [%d] (%d) terminated by signal %d\n",
            getjobpid(jobs, fg_pid)->jid, fg_pid, sig);
     deletejob(jobs, fg_pid);
@@ -426,16 +454,20 @@ void sigint_handler(int sig) //Antonio
  */
 void sigtstp_handler(int sig) //Jake 
 {
-  printf("Hi Jake and Ant\n");
-
   int i;
 
-  tcsetpgrp(STDIN_FILENO, getpid());
+  printf("Hello from sigtstp_handler\n");
+  
+  //tcsetpgrp(STDIN_FILENO, getpid());
   for(i=0; i < MAXJOBS; i++){
+    //    printf("Hello again from sigstp_handler\n");
+
     if(jobs[i].state == FG){
       jobs[i].state = ST;
-      kill(jobs[i].pid, sig);
-      listjobs(jobs);
+      kill(-jobs[i].pid, sig);
+      printf("Job [%d] (%d) stopped by signal %d\n",
+             jobs[i].jid, jobs[i].pid, sig);
+      //      listjobs(jobs);
       return;
     }
   }
