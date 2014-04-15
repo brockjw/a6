@@ -1,8 +1,8 @@
  /* 
  * tsh - A tiny shell program with job control
  * 
- * <H. Antonio Cardenas - hcardena> <Put your name and login ID here>
- * <Jacob W. Brock - jbrock>
+ * <H. Antonio Cardenas - hcardena@u.rochester.edu>
+ * <Jacob W. Brock - jbrock@cs.rochester.edu>
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +45,6 @@ char sbuf[MAXLINE];         /* for composing sprintf messages */
 
 struct job_t {              /* The job struct */
   pid_t pid;              /* job PID */
-  //  pid_t gid; /* job GID (added by Jake) */
   int jid;                /* job ID [1, 2, ...] */
   int state;              /* UNDEF, BG, FG, or ST */
   char cmdline[MAXLINE];  /* command line */
@@ -183,15 +182,12 @@ int main(int argc, char **argv)
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.  
 */
-void eval(char *cmdline) //Antonio
+void eval(char *cmdline)
 {
   char *argv[MAXARGS]; //Argument list execve()
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
-  //  int status; //satus for waitpid
   
-  //just replaced buf with cmdline in bg = ... and commented out the delcaration of buf above
-  //strcpy(buf, cmdline); //from now on, modifying buf instead of the original cmdline
   bg = parseline(cmdline, argv);
   int fg = !bg;
 
@@ -201,15 +197,15 @@ void eval(char *cmdline) //Antonio
   /* (Clever blocking and unblocking prevents race conditions. */
   sigset_t mask;
   sigemptyset(&mask);
-  sigaddset(&mask, SIGCHLD);
+  //sigaddset(&mask, SIGCHLD);
   sigaddset(&mask, SIGTTIN);
   sigaddset(&mask, SIGTTOU);
-  sigaddset(&mask, SIGTSTP);
-  sigprocmask(SIG_BLOCK, &mask, NULL); /* Block SIGCHLD and SIGTSTP */
+  //sigaddset(&mask, SIGTSTP);
+  sigprocmask(SIG_BLOCK, &mask, NULL); /* Block SIGTTIN and SIGTTOU signals */
 
   if(!builtin_cmd(argv)){
     if((pid = fork()) == 0) { /* Child runs user job. */
-      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock signals */
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock signals (don't block in child). */
       setpgid(0,0); /* Put this process into its own group. */
 
       if(execve(argv[0], argv, environ) < 0) {
@@ -221,10 +217,9 @@ void eval(char *cmdline) //Antonio
     sigdelset(&mask, SIGTTIN);
     sigdelset(&mask, SIGTTOU);
    
-    
     if(fg) { /* Shell waits for foreground job. */
       addjob(jobs, pid, FG, cmdline);
-      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock signals. */
       tcsetpgrp(STDIN_FILENO, pid); /* Pass control of terminal to child. */
       
       waitfg(pid); /* Sleep in 1 sec increments until job is no longer in foreground. */
@@ -233,7 +228,7 @@ void eval(char *cmdline) //Antonio
     }
     else { /* Shell does not wait for background job. */
       addjob(jobs, pid, BG, cmdline);
-      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock signals. */
       printf("[%d] (%d) %s", getjobpid(jobs, pid)->jid,  pid, cmdline);
     }
 
@@ -308,9 +303,8 @@ int parseline(const char *cmdline, char **argv)
  * builtin_cmd - If the user has typed a built-in command then execute
  *    it immediately.  
  */
-int builtin_cmd(char **argv) //Jake
+int builtin_cmd(char **argv)
 {
-  //strcmp() returns 0 if strings are equal
   if(!strcmp(argv[0], "quit")) {
     exit(0);
   }
@@ -330,28 +324,41 @@ int builtin_cmd(char **argv) //Jake
  */
 void do_bgfg(char **argv) 
 {
-  //  int status;
 
-  // Handle input formats: fg %1 or fg 1.
-  struct job_t * job;
-  if(argv[1][0] == '%') {
-    job = getjobjid(jobs, atoi(argv[1] + 1));
-  } else {
-    job = getjobjid(jobs, atoi(argv[1]));
-  }
-
-  // If job does not exist, print error message.
-  if(job == NULL){
-    printf("%s: No such job\n", argv[1]);
+  /* Simple error handling */
+  if(argv[1] == NULL) {
+    printf("%s command requires PID or %%jobid argument\n", argv[0]);
     return;
   }
 
-  if(!strcmp(argv[0], "bg")) {
-    // find job with jid == argv[1]. job.status = BG; send SIGCONT signal;
-    job->state = BG;
-    kill(job->pid, SIGCONT);
+  /* Handle input formats: fg %1 or fg 1, with error handling. */
+  struct job_t * job;
+  int jid, pid;
+  if(argv[1][0] == '%') {
+    jid = atoi(argv[1] + 1);
+    job = getjobjid(jobs, jid);
+    if(job == NULL){
+      printf("%s: No such job\n", argv[1]);
+      return;
+    }
+  } else if(argv[1][0] > '9' || argv[1][0] < '0') {
+    printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+    return;
+  } else {
+    pid = atoi(argv[1]);
+    job = getjobpid(jobs, pid);
+    if(job == NULL){
+      printf("(%s): No such process\n", argv[1]);
+      return;
+    }
   }
-  else { // "fg"
+
+  if(!strcmp(argv[0], "bg")) { /* bg command */
+    kill(job->pid, SIGCONT);
+    job->state = BG;
+    printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
+  }
+  else { /* fg command */
     kill(job->pid, SIGCONT);
     job->state = FG;
     setpgid(job->pid, tcgetpgrp(STDIN_FILENO));
@@ -359,11 +366,6 @@ void do_bgfg(char **argv)
 
     waitfg(job->pid); /* Wait until job is no longer the foreground process. */
     tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
-    //    if(waitpid(job->pid, &status, 0) < 0) {
-    //      unix_error("waitfg: waitpid error");
-    //    }
-
-    printf("new gid: %d\n", getgid());
   }
   return;
 }
@@ -373,17 +375,12 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+  /* Wait for foreground process to no longer be in foreground. */
   struct job_t * job = getjobpid(jobs, pid);
   while(job->state == FG) {
     sleep(1);
   }
   return;
-
-  //http://linux.die.net/man/2/waitpid
-  //http://stackoverflow.com/questions/900411/how-to-properly-wait-for-foreground-background-processes-in-my-own-shell-in-c
-  //http://www.tutorialspoint.com/unix_system_calls/execve.htm
-  // waitpid(pid, &status, 0);
-  // waitpid(pid, &status, WNOHANG); //first implementation. Might need revisions.
 }
 
 /*****************
@@ -399,25 +396,22 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-  printf("Hello from sigchld_handler.");
   int pid, status;
 
-  // Comment from http://www.gnu.org/software/libc/manual/html_node/Foreground-and-Background.html#Foreground-and-Background
-  // When all of the processes in the group have either completed or stopped, the shell should regain control of the terminal for its own process group by calling tcsetpgrp again.
-  
   // Reap every child (not necessarily one signal per child).
   // WNOHANG means quit once all zombies are reaped.
   while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
     
+    /* Handle exited child. */
     if(WIFEXITED(status)){ /* Process terminated normally. */
       deletejob(jobs, pid);
       return;
     }
     
+    /* Handle any signal that terminates child. */
     if(WIFSIGNALED(status)){ /* Signal terminated the child. Find out which signal. */
       
       int which_signal = WTERMSIG(status);
-      printf("Detected signal %d\n", which_signal);
       
       if(which_signal == SIGINT){ /* SIGINT */
         int job_jid = getjobpid(jobs, pid)->jid;
@@ -425,15 +419,12 @@ void sigchld_handler(int sig)
         printf("Job [%d] (%d) terminated by signal %d\n", job_jid, pid, which_signal);
         return;
       }
-      //not sure if it handles stp or stop (they're different)
-      else if(which_signal == SIGTSTP || which_signal == SIGSTOP){
-        printf("HI\n");
-        getjobpid(jobs, pid)->state = ST;
-        return;
-      }}
+    }
+
+    /* Handle stopped child. */
     if(WIFSTOPPED(status)){
-      printf("DUMB!\n");
       getjobpid(jobs, pid)->state = ST;
+      printf("(%d) stopped by signal %d\n", pid, WSTOPSIG(status));
     }
     
   }
@@ -446,22 +437,13 @@ void sigchld_handler(int sig)
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.  
  */
-void sigint_handler(int sig) //Antonio
+void sigint_handler(int sig)
 { 
- /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
-
-  //printf("Hello from sigint_handler\n");
-
   pid_t fg_pid; 
   
   fg_pid = fgpid(jobs);
 
   if(fg_pid) {
-    // Before, we sent sig, but that exited the shell :( so try SIGKILL
-    // I think it's because the shell never gets SIGCHLD that way so the
-    // tcsegpgrp was never called? --- nope that didn't work.
-    kill(fg_pid, sig); //why is this here? doesnt this only sends another signal? that's dumb.
-    //kill(getpid(), SIGCHLD);
     printf("Job [%d] (%d) terminated by signal %d\n",
            getjobpid(jobs, fg_pid)->jid, fg_pid, sig);
     deletejob(jobs, fg_pid);
@@ -475,22 +457,16 @@ void sigint_handler(int sig) //Antonio
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.  
  */
-void sigtstp_handler(int sig) //Jake 
+void sigtstp_handler(int sig)
 {
   int i;
 
-  printf("Hello from sigtstp_handler\n");
-  
-  //tcsetpgrp(STDIN_FILENO, getpid());
   for(i=0; i < MAXJOBS; i++){
-    //    printf("Hello again from sigstp_handler\n");
-
     if(jobs[i].state == FG){
+      tcsetpgrp(STDIN_FILENO, getpid()); /* Give stdin control back to shell. */
       jobs[i].state = ST;
-      kill(-jobs[i].pid, sig);
       printf("Job [%d] (%d) stopped by signal %d\n",
              jobs[i].jid, jobs[i].pid, sig);
-      //      listjobs(jobs);
       return;
     }
   }
