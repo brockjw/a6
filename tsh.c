@@ -225,7 +225,6 @@ void eval(char *cmdline) //Antonio
 
       // Use waitfg instead
       waitfg(pid); /* Sleep in 1 sec increments until job is no longer in foreground. */
-
       //      if(waitpid(pid, &status, 0) < 0) {
       //        unix_error("waitfg: waitpid error");
       //      }
@@ -364,10 +363,6 @@ void do_bgfg(char **argv)
     //      unix_error("waitfg: waitpid error");
     //    }
 
-    // Reap when fg job is done :-/
-    // HAVE SIGCHLD_HANDLER DELETE THE JOBS
-    //    deletejob(jobs, job->pid); 
-
     printf("new gid: %d\n", getgid());
   }
   return;
@@ -376,7 +371,7 @@ void do_bgfg(char **argv)
 /* 
  * waitfg - Block until process pid is no longer the foreground process
  */
-void waitfg(pid_t pid) //Antonio
+void waitfg(pid_t pid)
 {
   struct job_t * job = getjobpid(jobs, pid);
   while(job->state == FG) {
@@ -413,50 +408,31 @@ void sigchld_handler(int sig)
   // WNOHANG means quit once all zombies are reaped.
   while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
     
-    
-    if(WIFEXITED(status)){
+    if(WIFEXITED(status)){ /* Process terminated normally. */
       deletejob(jobs, pid);
-      return; //Process Terminated Normally.
+      return;
     }
-    else if(WIFSIGNALED(status)){   //Signal Terminated the child. Find out which signal.
+
+    if(WIFSIGNALED(status)){ /* Signal terminated the child. Find out which signal. */
       
       int which_signal = WTERMSIG(status);
       
-      if(which_signal == SIGINT){
-        if(pid == fgpid(jobs)){
-
-          printf("Job [%d] (%d) terminated by signal %d\n", getjobpid(jobs, pid)->jid, pid, sig);
-          deletejob(jobs, pid);
-        }
-        else
-          return; //no foreground job.
+      if(which_signal == SIGINT){ /* SIGINT */
+        deletejob(jobs, pid);
+        printf("Job [%d] (%d) terminated by signal %d\n", getjobpid(jobs, pid)->jid, pid, sig);
+        return;
       }
-
       //not sure if it handles stp or stop (they're different)
       else if(which_signal == SIGTSTP || which_signal == SIGSTOP){
-
         getjobpid(jobs, pid)->state = ST;
-        
         return;
       }
       else if(WIFSTOPPED(status)){
-        
-        //        int which_signal = WSTOPSIG(status);
         getjobpid(jobs, pid)->state = ST;
       }
       
-      
-    
-    
-    
+    }
 
-    
-    
-    
-    
-    
-
-    // Then do stuff with the status flag. using macros from man waitpid
   }
 
   return;
