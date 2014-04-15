@@ -186,7 +186,6 @@ int main(int argc, char **argv)
 void eval(char *cmdline) //Antonio
 {
   char *argv[MAXARGS]; //Argument list execve()
-  //char buf[MAXLINE]; //Holds modified command line
   int bg; //Should run the job in background or not
   pid_t pid; //Process ID
   //  int status; //satus for waitpid
@@ -221,25 +220,20 @@ void eval(char *cmdline) //Antonio
 
     sigdelset(&mask, SIGTTIN);
     sigdelset(&mask, SIGTTOU);
+   
+    
     if(fg) { /* Shell waits for foreground job. */
       addjob(jobs, pid, FG, cmdline);
       sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
-
       tcsetpgrp(STDIN_FILENO, pid); /* Pass control of terminal to child. */
-
-      // Use waitfg instead
+      
       waitfg(pid); /* Sleep in 1 sec increments until job is no longer in foreground. */
-      //      if(waitpid(pid, &status, 0) < 0) {
-      //        unix_error("waitfg: waitpid error");
-      //      }
-
+      
       tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
-//      deletejob(jobs, pid); /* Reap foreground job. */
     }
     else { /* Shell does not wait for background job. */
       addjob(jobs, pid, BG, cmdline);
       sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
-
       printf("[%d] (%d) %s", getjobpid(jobs, pid)->jid,  pid, cmdline);
     }
 
@@ -405,7 +399,7 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-  //  printf("Hello from sigchld_handler.");
+  printf("Hello from sigchld_handler.");
   int pid, status;
 
   // Comment from http://www.gnu.org/software/libc/manual/html_node/Foreground-and-Background.html#Foreground-and-Background
@@ -419,7 +413,7 @@ void sigchld_handler(int sig)
       deletejob(jobs, pid);
       return;
     }
-
+    
     if(WIFSIGNALED(status)){ /* Signal terminated the child. Find out which signal. */
       
       int which_signal = WTERMSIG(status);
@@ -428,7 +422,7 @@ void sigchld_handler(int sig)
       if(which_signal == SIGINT){ /* SIGINT */
         int job_jid = getjobpid(jobs, pid)->jid;
         deletejob(jobs, pid);
-        printf("Job [%d] (%d) terminated by signal %d\n", job_jid, pid, sig);
+        printf("Job [%d] (%d) terminated by signal %d\n", job_jid, pid, which_signal);
         return;
       }
       //not sure if it handles stp or stop (they're different)
@@ -436,12 +430,12 @@ void sigchld_handler(int sig)
         printf("HI\n");
         getjobpid(jobs, pid)->state = ST;
         return;
-      }
-      else if(WIFSTOPPED(status)){
-        getjobpid(jobs, pid)->state = ST;
-      }
-      
+      }}
+    if(WIFSTOPPED(status)){
+      printf("DUMB!\n");
+      getjobpid(jobs, pid)->state = ST;
     }
+    
   }
 
   return;
@@ -456,7 +450,7 @@ void sigint_handler(int sig) //Antonio
 { 
  /**Question: Why when sending a control-c signal to our shell, it displays ^C and kills the job, but when you do the same on the actual terminal it does not display ^C. Is there any way to handle this?**/
 
-  //  printf("Hello from sigint_handler\n");
+  //printf("Hello from sigint_handler\n");
 
   pid_t fg_pid; 
   
