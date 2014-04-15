@@ -199,6 +199,7 @@ void eval(char *cmdline) //Antonio
   if(argv[0] == NULL)
     return; //ignore empty lines
 
+  /* (Clever blocking and unblocking prevents race conditions. */
   sigset_t mask;
   sigemptyset(&mask);
   sigaddset(&mask, SIGCHLD);
@@ -218,8 +219,11 @@ void eval(char *cmdline) //Antonio
       }
     }
 
+    sigdelset(&mask, SIGTTIN);
+    sigdelset(&mask, SIGTTOU);
     if(fg) { /* Shell waits for foreground job. */
       addjob(jobs, pid, FG, cmdline);
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
 
       tcsetpgrp(STDIN_FILENO, pid); /* Pass control of terminal to child. */
 
@@ -230,15 +234,20 @@ void eval(char *cmdline) //Antonio
       //      }
 
       tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
-      deletejob(jobs, pid); /* Reap foreground job. */
+//      deletejob(jobs, pid); /* Reap foreground job. */
     }
     else { /* Shell does not wait for background job. */
       addjob(jobs, pid, BG, cmdline);
+      sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
+
       printf("[%d] (%d) %s", getjobpid(jobs, pid)->jid,  pid, cmdline);
     }
 
-    // This prevents race condition - see book p. 757.
-    sigprocmask(SIG_UNBLOCK, &mask, NULL); /* Unblock SIGCHLD and SIGTSTP */
+    /* Unblock SIGTTIN and SIGTTOU */
+    sigaddset(&mask, SIGTTIN);
+    sigaddset(&mask, SIGTTOU);
+    sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    
   }
   
   return;
@@ -354,9 +363,6 @@ void do_bgfg(char **argv)
     setpgid(job->pid, tcgetpgrp(STDIN_FILENO));
     tcsetpgrp(STDIN_FILENO, job->pid); /* Pass control of terminal to child. */
 
-    // Since it's in the fg, wait for it - not sure if correct.
-    //USE WAITFG IN HERE
-
     waitfg(job->pid); /* Wait until job is no longer the foreground process. */
     tcsetpgrp(STDIN_FILENO, getpid()); /* Recover terminal control for parent */
     //    if(waitpid(job->pid, &status, 0) < 0) {
@@ -399,6 +405,7 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+  //  printf("Hello from sigchld_handler.");
   int pid, status;
 
   // Comment from http://www.gnu.org/software/libc/manual/html_node/Foreground-and-Background.html#Foreground-and-Background
@@ -416,14 +423,17 @@ void sigchld_handler(int sig)
     if(WIFSIGNALED(status)){ /* Signal terminated the child. Find out which signal. */
       
       int which_signal = WTERMSIG(status);
+      printf("Detected signal %d\n", which_signal);
       
       if(which_signal == SIGINT){ /* SIGINT */
+        int job_jid = getjobpid(jobs, pid)->jid;
         deletejob(jobs, pid);
-        printf("Job [%d] (%d) terminated by signal %d\n", getjobpid(jobs, pid)->jid, pid, sig);
+        printf("Job [%d] (%d) terminated by signal %d\n", job_jid, pid, sig);
         return;
       }
       //not sure if it handles stp or stop (they're different)
       else if(which_signal == SIGTSTP || which_signal == SIGSTOP){
+        printf("HI\n");
         getjobpid(jobs, pid)->state = ST;
         return;
       }
@@ -432,7 +442,6 @@ void sigchld_handler(int sig)
       }
       
     }
-
   }
 
   return;
